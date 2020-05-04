@@ -59,6 +59,23 @@ class UKF {
    */
   void PredictedMeanAndCovariance();
 
+  /**
+   * Prediction of the sigma points using the process function for the prediction step
+   * @param z_out predicted mean measurement vector
+   * @param Zsig_out Predicted measurement sigma points
+   * @param S_out predicted measurement covariance matrix
+   */
+  void PredictRadarMeasurement(Eigen::VectorXd* z_out, Eigen::MatrixXd* Zsig_out, Eigen::MatrixXd* S_out);
+
+  /**
+   * Prediction of the sigma points using the process function for the prediction step
+   * @param z measurement vector
+   * @param z_pred predicted mean measurement vector
+   * @param Zsig Predicted measurement sigma points
+   * @param S predicted measurement covariance matrix
+   */
+  void UpdateState(Eigen::VectorXd z, Eigen::VectorXd z_pred, Eigen::MatrixXd Zsig, Eigen::MatrixXd S);
+
   // initially set to false, set to true in first call of ProcessMeasurement
   bool is_initialized_;
 
