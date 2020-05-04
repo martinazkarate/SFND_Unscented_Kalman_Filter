@@ -41,6 +41,23 @@ class UKF {
    */
   void UpdateRadar(MeasurementPackage meas_package);
 
+  /**
+   * Generates the sigma points for the prediction step
+   * @param Xsig_out Matrix containing the sigma points
+   */
+  void GenerateAugmentedSigmaPoints(Eigen::MatrixXd* Xsig_out);
+
+  /**
+   * Prediction of the sigma points using the process function for the prediction step
+   * @param Xsig_out Matrix containing the sigma points
+   * @param delta_t Time between k and k+1 in s
+   */
+  void SigmaPointPrediction(Eigen::MatrixXd Xsig_aug, double delta_t);
+
+  /**
+   * Calculates Mean and Covariance Matrix of predicted sigma points
+   */
+  void PredictedMeanAndCovariance();
 
   // initially set to false, set to true in first call of ProcessMeasurement
   bool is_initialized_;
