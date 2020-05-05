@@ -74,7 +74,7 @@ class UKF {
    * @param Zsig Predicted measurement sigma points
    * @param S predicted measurement covariance matrix
    */
-  void UpdateState(Eigen::VectorXd z, Eigen::VectorXd z_pred, Eigen::MatrixXd Zsig, Eigen::MatrixXd S);
+  void UpdateRadarMeasurement(Eigen::VectorXd z, Eigen::VectorXd z_pred, Eigen::MatrixXd Zsig, Eigen::MatrixXd S);
 
   // initially set to false, set to true in first call of ProcessMeasurement
   bool is_initialized_;
@@ -126,6 +126,12 @@ class UKF {
 
   // Augmented state dimension
   int n_aug_;
+
+  // Measurment dimension laser
+  int n_z_las_;
+
+  // Measurment dimension radar
+  int n_z_rad_;
 
   // Sigma point spreading parameter
   double lambda_;

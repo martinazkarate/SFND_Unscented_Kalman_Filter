@@ -5,6 +5,10 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
+// Output stream to store NIS values
+//std::ofstream nis_las_;
+//std::ofstream nis_rad_;
+
 /**
  * Initializes Unscented Kalman filter
  */
@@ -14,6 +18,10 @@ UKF::UKF() {
 
   // augmented state dimension
   n_aug_ = 7;
+
+  // measurement dimension
+  n_z_las_ = 2;
+  n_z_rad_ = 3;
 
   // initialise lambda to recommended value
   lambda_ = 3 - n_aug_;
@@ -43,7 +51,7 @@ UKF::UKF() {
   // std::cout << "Weights:" << std::endl << weights_ << std::endl;
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 5; //30 -> This value seems to high, try with 10 or 5. In the course assigment it was 0.2
+  std_a_ = 3; //30 -> This value seems to high, try with 10 or 5. In the course assigment it was 0.2
 
   // Process noise standard deviation yaw acceleration in rad/s^2
   std_yawdd_ = 1; //30 -> This value seems to high, try with 1 or less. In the course assigment it was 0.2
@@ -75,7 +83,25 @@ UKF::UKF() {
   // update this values in the first call to process measurement.
   is_initialized_ = false;
   time_us_ = 0;
+/*
+  std::string filename = "../nis_las.csv";
+  nis_las_(filename, std::ios::binary | std::ios::app);
 
+  if (!nis_las_.is_open()) {
+    std::cerr << "failed to open file: " << filename << std::endl;
+    return EXIT_FAILURE;
+  }
+  nis_las_ << "NIS LIDAR" << std::endl;
+
+  filename = "../nis_rad.csv";
+  nis_rad_(filename, std::ios::binary | std::ios::app);
+
+  if (!nis_rad_.is_open()) {
+    std::cerr << "failed to open file: " << filename << std::endl;
+    return EXIT_FAILURE;
+  }
+  nis_rad_ << "NIS RADAR" << std::endl;
+*/
 }
 
 UKF::~UKF() {}
@@ -167,9 +193,9 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
    * Use lidar data to update the belief 
    * about the object's position. Modify the state vector, x_, and 
    * covariance, P_.
-   * TODO: You can also calculate the lidar NIS, if desired.
+   * Calculate the lidar NIS, at the end.
    */
-  int n_z = 2;
+  int n_z = n_z_las_;
   // measurement matrix
   MatrixXd H_ = MatrixXd(n_z,n_x_);
   H_ << 1, 0, 0, 0, 0,
@@ -192,6 +218,11 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   x_ = x_ + (K * y);
   MatrixXd I = MatrixXd::Identity(n_x_, n_x_);
   P_ = (I - K * H_) * P_;
+
+  //NIS check
+  double nis = y.transpose()*Si*y;
+  //std::cout << "NIS LIDAR: " << nis << std::endl;
+  //nis_las_ << nis << std::endl;
 }
 
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
@@ -199,16 +230,16 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
    * Use radar data to update the belief 
    * about the object's position. Modify the state vector, x_, and 
    * covariance, P_.
-   * TODO: You can also calculate the radar NIS, if desired.
+   * Calculate the radar NIS, at the end.
    */
-  int n_z = 3; // set measurement dimension, radar can measure r, phi, and r_dot
+  int n_z = n_z_rad_; // set measurement dimension, radar can measure r, phi, and r_dot
   VectorXd z_pred = VectorXd(n_z);
   MatrixXd Zsig = MatrixXd(n_z, 2*n_aug_+1);
   MatrixXd S = MatrixXd(n_z, n_z);
   //std::cout << "Calling predict Radar measurement" << std::endl;
   PredictRadarMeasurement(&z_pred, &Zsig, &S);
   //std::cout << "Calling update Radar measurement" << std::endl;
-  UpdateState(meas_package.raw_measurements_, z_pred, Zsig, S);
+  UpdateRadarMeasurement(meas_package.raw_measurements_, z_pred, Zsig, S);
 }
 
 void UKF::GenerateAugmentedSigmaPoints(MatrixXd* Xsig_out) {
@@ -303,6 +334,8 @@ void UKF::PredictedMeanAndCovariance() {
   for (int i = 0; i < 2 * n_aug_ + 1; ++i) {  // iterate over sigma points
     x_ = x_ + weights_(i) * Xsig_pred_.col(i);
   }
+  while (x_(3)> M_PI) x_(3)-=2.*M_PI;
+  while (x_(3)<-M_PI) x_(3)+=2.*M_PI;
   //std::cout << "Predicted State Mean: " << std::endl << x_ << std::endl;
 
   // predicted state covariance matrix
@@ -322,7 +355,7 @@ void UKF::PredictedMeanAndCovariance() {
 void UKF::PredictRadarMeasurement(VectorXd* z_out, MatrixXd* Zsig_out, MatrixXd* S_out) {
   
   // set measurement dimension, radar can measure r, phi, and r_dot
-  int n_z = 3;
+  int n_z = n_z_rad_;
 
   // create matrix for sigma points in measurement space
   MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug_ + 1);
@@ -382,9 +415,9 @@ void UKF::PredictRadarMeasurement(VectorXd* z_out, MatrixXd* Zsig_out, MatrixXd*
   *S_out = S;
 }
 
-void UKF::UpdateState(VectorXd z, VectorXd z_pred, MatrixXd Zsig, MatrixXd S) {
+void UKF::UpdateRadarMeasurement(VectorXd z, VectorXd z_pred, MatrixXd Zsig, MatrixXd S) {
 
-  int n_z = 3;
+  int n_z = n_z_rad_;
 
   // create matrix for cross correlation Tc
   MatrixXd Tc = MatrixXd(n_x_, n_z);
@@ -422,4 +455,9 @@ void UKF::UpdateState(VectorXd z, VectorXd z_pred, MatrixXd Zsig, MatrixXd S) {
   P_ = P_ - K*S*K.transpose();
   //std::cout << "Updated State: " << std::endl << x_ << std::endl;
   //std::cout << "Updated Covariance: " << std::endl << P_ << std::endl;
+
+  //NIS Check
+  double nis = z_diff.transpose()*S.inverse()*z_diff;
+  //std::cout << "NIS RADAR: " << nis << std::endl;
+  //nis_rad_ << nis << std::endl;
 }
