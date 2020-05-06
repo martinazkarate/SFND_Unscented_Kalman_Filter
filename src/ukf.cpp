@@ -54,7 +54,7 @@ UKF::UKF() {
   std_a_ = 3; //30 -> This value seems to high, try with 10 or 5. In the course assigment it was 0.2
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 1; //30 -> This value seems to high, try with 1 or less. In the course assigment it was 0.2
+  std_yawdd_ = 0.2; //30 -> This value seems to high, try with 1 or less. In the course assigment it was 0.2
   
   /**
    * DO NOT MODIFY measurement noise values below.
@@ -116,11 +116,11 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       x_.head(2) = meas_package.raw_measurements_;
 
       P_.fill(0.0);
-      P_(0,0) = std_laspx_;
-      P_(1,1) = std_laspy_;
-      P_(2,2) = 20;
-      P_(3,3) = 5;
-      P_(4,4) = 1;
+      P_(0,0) = std_laspx_*std_laspx_;
+      P_(1,1) = std_laspy_*std_laspy_;
+      P_(2,2) = 10;
+      P_(3,3) = 1;
+      P_(4,4) = 0.5;
       //std::cout << "Initialised state and covariance with LASER" << std::endl;
       //std::cout << x_ << std::endl;
       //std::cout << P_ << std::endl;
@@ -136,9 +136,9 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       x_(2) = rho_dot;
       
       P_.fill(0.0);
-      P_(0,0) = std_radr_;
-      P_(1,1) = std_radr_;
-      P_(2,2) = 2*std_radrd_;
+      P_(0,0) = std_radr_*std_radr_;
+      P_(1,1) = std_radr_*std_radr_;
+      P_(2,2) = 2*std_radrd_*std_radrd_;
       P_(3,3) = 5;
       P_(4,4) = 1;
       //std::cout << "Initialised state and covariance with RADAR" << std::endl;
@@ -216,8 +216,9 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   //new estimate
   x_ = x_ + (K * y);
-  MatrixXd I = MatrixXd::Identity(n_x_, n_x_);
-  P_ = (I - K * H_) * P_;
+  //MatrixXd I = MatrixXd::Identity(n_x_, n_x_);
+  //P_ = (I - K * H_) * P_;
+  P_ -= K * H_ * P_;
 
   //NIS check
   double nis = y.transpose()*Si*y;
@@ -285,13 +286,13 @@ void UKF::SigmaPointPrediction(MatrixXd Xsig_aug, double delta_t) {
   // predict sigma points
   for (int i = 0; i< 2*n_aug_+1; ++i) {
     // extract values for better readability
-    double p_x = Xsig_aug(0,i);
-    double p_y = Xsig_aug(1,i);
-    double v = Xsig_aug(2,i);
-    double yaw = Xsig_aug(3,i);
-    double yawd = Xsig_aug(4,i);
-    double nu_a = Xsig_aug(5,i);
-    double nu_yawdd = Xsig_aug(6,i);
+    const double p_x = Xsig_aug(0,i);
+    const double p_y = Xsig_aug(1,i);
+    const double v = Xsig_aug(2,i);
+    const double yaw = Xsig_aug(3,i);
+    const double yawd = Xsig_aug(4,i);
+    const double nu_a = Xsig_aug(5,i);
+    const double nu_yawdd = Xsig_aug(6,i);
 
     // predicted state values
     double px_p, py_p;
