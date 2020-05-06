@@ -9,6 +9,8 @@ using Eigen::VectorXd;
 //std::ofstream nis_las_;
 //std::ofstream nis_rad_;
 
+void NormalizeAngle(double& phi);
+
 /**
  * Initializes Unscented Kalman filter
  */
@@ -216,8 +218,6 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   //new estimate
   x_ = x_ + (K * y);
-  //MatrixXd I = MatrixXd::Identity(n_x_, n_x_);
-  //P_ = (I - K * H_) * P_;
   P_ -= K * H_ * P_;
 
   //NIS check
@@ -332,11 +332,8 @@ void UKF::PredictedMeanAndCovariance() {
 
   // predicted state mean
   x_.fill(0.0);
-  for (int i = 0; i < 2 * n_aug_ + 1; ++i) {  // iterate over sigma points
-    x_ = x_ + weights_(i) * Xsig_pred_.col(i);
-  }
-  while (x_(3)> M_PI) x_(3)-=2.*M_PI;
-  while (x_(3)<-M_PI) x_(3)+=2.*M_PI;
+  x_ = Xsig_pred_ * weights_;
+  NormalizeAngle(x_(3));
   //std::cout << "Predicted State Mean: " << std::endl << x_ << std::endl;
 
   // predicted state covariance matrix
@@ -345,9 +342,8 @@ void UKF::PredictedMeanAndCovariance() {
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
     // angle normalization
-    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
-    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
-
+    NormalizeAngle(x_diff(3));
+    
     P_ = P_ + weights_(i) * x_diff * x_diff.transpose() ;
   }
   //std::cout << "Predicted State Covariance: " << std::endl << P_ << std::endl;
@@ -370,18 +366,22 @@ void UKF::PredictRadarMeasurement(VectorXd* z_out, MatrixXd* Zsig_out, MatrixXd*
   // transform sigma points into measurement space
   for (int i = 0; i < 2 * n_aug_ + 1; ++i) {  // 2n+1 simga points
     // extract values for better readability
-    double p_x = Xsig_pred_(0,i);
-    double p_y = Xsig_pred_(1,i);
-    double v  = Xsig_pred_(2,i);
-    double yaw = Xsig_pred_(3,i);
+    const double p_x = Xsig_pred_(0,i);
+    const double p_y = Xsig_pred_(1,i);
+    const double v  = Xsig_pred_(2,i);
+    const double yaw = Xsig_pred_(3,i);
 
-    double v1 = cos(yaw)*v;
-    double v2 = sin(yaw)*v;
+    const double v1 = cos(yaw)*v;
+    const double v2 = sin(yaw)*v;
 
     // measurement model
+    double eps = 0.001;
     Zsig(0,i) = sqrt(p_x*p_x + p_y*p_y);                       // r
-    Zsig(1,i) = atan2(p_y,p_x);                                // phi
-    Zsig(2,i) = (p_x*v1 + p_y*v2) / sqrt(p_x*p_x + p_y*p_y);   // r_dot
+    if (p_y != 0.0 || p_x != 0.0)
+      Zsig(1,i) = atan2(p_y,p_x);                                // phi
+    else
+      Zsig(1,i) = 0.0;
+    Zsig(2,i) = (p_x*v1 + p_y*v2) / std::max(eps, Zsig(0,i));   // r_dot
   }
 
   // mean predicted measurement
@@ -397,8 +397,7 @@ void UKF::PredictRadarMeasurement(VectorXd* z_out, MatrixXd* Zsig_out, MatrixXd*
     VectorXd z_diff = Zsig.col(i) - z_pred;
 
     // angle normalization
-    while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-    while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
+    NormalizeAngle(z_diff(1));
 
     S = S + weights_(i) * z_diff * z_diff.transpose();
   }
@@ -429,15 +428,13 @@ void UKF::UpdateRadarMeasurement(VectorXd z, VectorXd z_pred, MatrixXd Zsig, Mat
     // residual
     VectorXd z_diff = Zsig.col(i) - z_pred;
     // angle normalization
-    while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-    while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
-
+    NormalizeAngle(z_diff(1));
+    
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
     // angle normalization
-    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
-    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
-
+    NormalizeAngle(x_diff(3));
+    
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
 
@@ -448,9 +445,8 @@ void UKF::UpdateRadarMeasurement(VectorXd z, VectorXd z_pred, MatrixXd Zsig, Mat
   VectorXd z_diff = z - z_pred;
 
   // angle normalization
-  while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-  while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
-
+  NormalizeAngle(z_diff(1));
+  
   // update state mean and covariance matrix
   x_ = x_ + K * z_diff;
   P_ = P_ - K*S*K.transpose();
@@ -461,4 +457,9 @@ void UKF::UpdateRadarMeasurement(VectorXd z, VectorXd z_pred, MatrixXd Zsig, Mat
   double nis = z_diff.transpose()*S.inverse()*z_diff;
   //std::cout << "NIS RADAR: " << nis << std::endl;
   //nis_rad_ << nis << std::endl;
+}
+
+void NormalizeAngle(double& phi)
+{
+  phi = atan2(sin(phi), cos(phi));
 }
